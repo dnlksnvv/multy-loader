@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build binaries
+        run: |
+          # Linux
+          GOOS=linux GOARCH=amd64 go build -o multy-loader-linux-amd64 .
+          # Windows
+          GOOS=windows GOARCH=amd64 go build -o multy-loader-windows-amd64.exe .
+          # macOS Intel
+          GOOS=darwin GOARCH=amd64 go build -o multy-loader-darwin-amd64 .
+          # macOS Apple Silicon
+          GOOS=darwin GOARCH=arm64 go build -o multy-loader-darwin-arm64 .
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            multy-loader-linux-amd64
+            multy-loader-windows-amd64.exe
+            multy-loader-darwin-amd64
+            multy-loader-darwin-arm64
+          generate_release_notes: true
+

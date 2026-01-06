@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multy Loader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'midnight': '#0f0f14',
+                        'surface': '#16161d',
+                        'surface-2': '#1e1e27',
+                        'surface-3': '#2a2a36',
+                        'border': '#32323f',
+                        'muted': '#6b6b7a',
+                        'accent': '#7c5cff',
+                        'accent-hover': '#9178ff',
+                        'success': '#34d399',
+                        'danger': '#f87171',
+                        'warning': '#fbbf24',
+                    },
+                    fontFamily: {
+                        'sans': ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+                        'mono': ['JetBrains Mono', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+        
+        body {
+            background: linear-gradient(135deg, #0f0f14 0%, #16161d 50%, #1a1a24 100%);
+        }
+        
+        .glass {
+            background: rgba(22, 22, 29, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(50, 50, 63, 0.5);
+        }
+        
+        .glow {
+            box-shadow: 0 0 60px -15px rgba(124, 92, 255, 0.3);
+        }
+        
+        .progress-bar {
+            background: linear-gradient(90deg, #7c5cff, #9178ff);
+            transition: width 0.3s ease;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #7c5cff 0%, #6347e6 100%);
+            transition: all 0.2s ease;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #9178ff 0%, #7c5cff 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px -5px rgba(124, 92, 255, 0.5);
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: #32323f;
+            border-radius: 3px;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+            background: #4a4a5a;
+        }
+
+        input[type="checkbox"] {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid #32323f;
+            border-radius: 4px;
+            background: transparent;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        input[type="checkbox"]:checked {
+            background: #7c5cff;
+            border-color: #7c5cff;
+        }
+        
+        input[type="checkbox"]:checked::after {
+            content: '✓';
+            display: block;
+            text-align: center;
+            color: white;
+            font-size: 12px;
+            line-height: 14px;
+        }
+        
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-white font-sans" x-data="app()" x-init="init()">
+    
+    <!-- Header -->
+    <header class="glass sticky top-0 z-50 border-b border-border">
+        <div class="max-w-7xl mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-purple-600 flex items-center justify-center">
+                        <i data-lucide="download-cloud" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold">Multy Loader</h1>
+                        <p class="text-xs text-muted">File Download Manager</p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                    <!-- Import Config -->
+                    <label class="cursor-pointer px-4 py-2 rounded-lg border border-border hover:border-accent/50 hover:bg-surface-2 transition-all flex items-center gap-2 text-sm">
+                        <i data-lucide="upload" class="w-4 h-4"></i>
+                        <span>Import</span>
+                        <input type="file" accept=".json" class="hidden" @change="importConfig($event)">
+                    </label>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-8">
+        <div class="grid grid-cols-12 gap-6">
+            
+            <!-- Sidebar - Config List -->
+            <aside class="col-span-3">
+                <div class="glass rounded-2xl p-4 sticky top-24">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="font-semibold text-sm uppercase tracking-wider text-muted">Configs</h2>
+                        <button @click="showNewConfigModal = true" class="w-8 h-8 rounded-lg bg-accent/10 hover:bg-accent/20 flex items-center justify-center transition-colors">
+                            <i data-lucide="plus" class="w-4 h-4 text-accent"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="space-y-2 max-h-[calc(100vh-300px)] overflow-y-auto scrollbar-thin">
+                        <template x-for="cfg in configs" :key="cfg">
+                            <button 
+                                @click="selectConfig(cfg)"
+                                :class="selectedConfigName === cfg ? 'bg-accent/20 border-accent/50' : 'border-transparent hover:bg-surface-2'"
+                                class="w-full text-left px-4 py-3 rounded-xl border transition-all flex items-center gap-3 group"
+                            >
+                                <i data-lucide="folder" class="w-4 h-4 text-muted group-hover:text-accent transition-colors"></i>
+                                <span x-text="cfg" class="truncate text-sm"></span>
+                            </button>
+                        </template>
+                        
+                        <div x-show="configs.length === 0" class="text-center py-8 text-muted text-sm">
+                            <i data-lucide="folder-open" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                            <p>No configs yet</p>
+                            <p class="text-xs mt-1">Create one to get started</p>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <section class="col-span-9">
+                <!-- No config selected -->
+                <div x-show="!selectedConfig" class="glass rounded-2xl p-12 text-center">
+                    <div class="w-20 h-20 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-6">
+                        <i data-lucide="package" class="w-10 h-10 text-muted"></i>
+                    </div>
+                    <h2 class="text-xl font-semibold mb-2">Select a Config</h2>
+                    <p class="text-muted mb-6">Choose a config from the sidebar or create a new one</p>
+                    <button @click="showNewConfigModal = true" class="btn-primary px-6 py-3 rounded-xl font-medium inline-flex items-center gap-2">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                        Create New Config
+                    </button>
+                </div>
+
+                <!-- Config Editor -->
+                <div x-show="selectedConfig" x-cloak class="space-y-6 fade-in">
+                    <!-- Config Header -->
+                    <div class="glass rounded-2xl p-6">
+                        <div class="flex items-start justify-between mb-6">
+                            <div>
+                                <h2 class="text-2xl font-bold" x-text="selectedConfig?.name"></h2>
+                                <p class="text-muted text-sm mt-1 font-mono" x-text="selectedConfig?.rootDirectory || 'No root directory set'"></p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button @click="exportConfig()" class="px-4 py-2 rounded-lg border border-border hover:border-accent/50 hover:bg-surface-2 transition-all flex items-center gap-2 text-sm">
+                                    <i data-lucide="download" class="w-4 h-4"></i>
+                                    Export
+                                </button>
+                                <button @click="openEditConfigModal()" class="px-4 py-2 rounded-lg border border-border hover:border-accent/50 hover:bg-surface-2 transition-all flex items-center gap-2 text-sm">
+                                    <i data-lucide="settings" class="w-4 h-4"></i>
+                                    Settings
+                                </button>
+                                <button @click="deleteConfig()" class="px-4 py-2 rounded-lg border border-danger/30 hover:bg-danger/10 text-danger transition-all flex items-center gap-2 text-sm">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Actions Bar -->
+                        <div class="flex items-center justify-between pt-4 border-t border-border">
+                            <div class="flex items-center gap-4">
+                                <label class="flex items-center gap-2 cursor-pointer text-sm">
+                                    <input type="checkbox" x-model="selectAll" @change="toggleSelectAll()">
+                                    <span class="text-muted">Select All</span>
+                                </label>
+                                <span class="text-muted text-sm" x-text="`${selectedFiles.length} of ${selectedConfig?.files?.length || 0} selected`"></span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <button 
+                                    @click="downloadSelected(false)" 
+                                    :disabled="selectedFiles.length === 0"
+                                    :class="selectedFiles.length === 0 ? 'opacity-50 cursor-not-allowed' : ''"
+                                    class="btn-primary px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 text-sm"
+                                >
+                                    <i data-lucide="download" class="w-4 h-4"></i>
+                                    Install Selected
+                                </button>
+                                <button @click="showAddFileModal = true" class="px-4 py-2 rounded-xl border border-accent/50 text-accent hover:bg-accent/10 transition-all flex items-center gap-2 text-sm">
+                                    <i data-lucide="plus" class="w-4 h-4"></i>
+                                    Add File
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Files List -->
+                    <div class="glass rounded-2xl overflow-hidden">
+                        <div class="px-6 py-4 border-b border-border flex items-center gap-4 text-xs uppercase tracking-wider text-muted font-medium">
+                            <div class="w-8"></div>
+                            <div class="flex-1">File</div>
+                            <div class="w-32">Folder</div>
+                            <div class="w-24 text-right">Size</div>
+                            <div class="w-48 text-center">Status</div>
+                            <div class="w-44 text-right">Actions</div>
+                        </div>
+                        
+                        <div class="divide-y divide-border max-h-[calc(100vh-450px)] overflow-y-auto scrollbar-thin">
+                            <template x-for="file in selectedConfig?.files || []" :key="file.id">
+                                <div class="px-6 py-4 hover:bg-surface-2/50 transition-colors">
+                                    <div class="flex items-center gap-4">
+                                        <input type="checkbox" :value="file.id" x-model="selectedFiles">
+                                        
+                                        <div class="flex-1 min-w-0 cursor-pointer" @click="openEditFileModal(file)">
+                                            <p class="font-medium truncate hover:text-accent transition-colors" x-text="file.title || file.fileName"></p>
+                                            <p class="text-xs text-muted truncate font-mono mt-0.5" x-text="file.fileName"></p>
+                                            <p x-show="file.description" class="text-xs text-muted mt-1 line-clamp-2" x-html="linkifyText(file.description)"></p>
+                                        </div>
+                                        
+                                        <div class="w-32">
+                                            <span class="text-sm text-muted font-mono" x-text="file.folder || '/'"></span>
+                                        </div>
+                                        
+                                        <div class="w-24 text-right">
+                                            <span class="text-sm font-mono" x-text="formatSize(fileStatuses[file.id]?.size || 0)"></span>
+                                        </div>
+                                        
+                                        <div class="w-48 text-center">
+                                            <!-- Status Badge -->
+                                            <template x-if="downloadProgress[file.id]?.status === 'downloading'">
+                                                <div class="flex flex-col items-center gap-1">
+                                                    <div class="w-full h-1.5 bg-surface-3 rounded-full overflow-hidden">
+                                                        <div class="progress-bar h-full rounded-full" :style="`width: ${downloadProgress[file.id]?.percent || 0}%`"></div>
+                                                    </div>
+                                                    <div class="flex items-center gap-2 text-xs">
+                                                        <span class="text-accent font-medium" x-text="`${Math.round(downloadProgress[file.id]?.percent || 0)}%`"></span>
+                                                        <span class="text-muted" x-text="`${formatSize(downloadProgress[file.id]?.downloaded || 0)} / ${formatSize(downloadProgress[file.id]?.total || 0)}`"></span>
+                                                    </div>
+                                                    <span class="text-xs text-success" x-text="`${formatSpeed(downloadProgress[file.id]?.speed || 0)}`"></span>
+                                                </div>
+                                            </template>
+                                            <template x-if="downloadProgress[file.id]?.status === 'completed'">
+                                                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-success/10 text-success text-xs">
+                                                    <i data-lucide="check" class="w-3 h-3"></i>
+                                                    Done
+                                                </span>
+                                            </template>
+                                            <template x-if="downloadProgress[file.id]?.status === 'error'">
+                                                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-danger/10 text-danger text-xs" :title="downloadProgress[file.id]?.error">
+                                                    <i data-lucide="x" class="w-3 h-3"></i>
+                                                    Error
+                                                </span>
+                                            </template>
+                                            <template x-if="downloadProgress[file.id]?.status === 'cancelled'">
+                                                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-warning/10 text-warning text-xs">
+                                                    <i data-lucide="pause" class="w-3 h-3"></i>
+                                                    Stopped
+                                                </span>
+                                            </template>
+                                            <template x-if="!downloadProgress[file.id] && fileStatuses[file.id]?.exists">
+                                                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-success/10 text-success text-xs">
+                                                    <i data-lucide="check-circle" class="w-3 h-3"></i>
+                                                    Installed
+                                                </span>
+                                            </template>
+                                            <template x-if="!downloadProgress[file.id] && !fileStatuses[file.id]?.exists">
+                                                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-warning/10 text-warning text-xs">
+                                                    <i data-lucide="alert-circle" class="w-3 h-3"></i>
+                                                    Missing
+                                                </span>
+                                            </template>
+                                        </div>
+                                        
+                                        <div class="w-44 flex items-center justify-end gap-1">
+                                            <!-- Source link button -->
+                                            <button 
+                                                @click.stop="openSourceUrl(file)" 
+                                                x-show="file.sourceUrl"
+                                                class="p-2 rounded-lg hover:bg-accent/10 transition-colors group"
+                                                title="Open source page"
+                                            >
+                                                <i data-lucide="external-link" class="w-4 h-4 text-muted group-hover:text-accent"></i>
+                                            </button>
+                                            <!-- Description button -->
+                                            <button 
+                                                @click.stop="openDescriptionModal(file)" 
+                                                x-show="file.description"
+                                                class="p-2 rounded-lg hover:bg-accent/10 transition-colors group"
+                                                title="View description"
+                                            >
+                                                <i data-lucide="file-text" class="w-4 h-4 text-muted group-hover:text-accent"></i>
+                                            </button>
+                                            <!-- Stop download button -->
+                                            <button 
+                                                @click="cancelDownload(file.id)" 
+                                                x-show="downloadProgress[file.id]?.status === 'downloading'"
+                                                class="p-2 rounded-lg hover:bg-warning/10 transition-colors group"
+                                                title="Stop download"
+                                            >
+                                                <i data-lucide="square" class="w-4 h-4 text-muted group-hover:text-warning"></i>
+                                            </button>
+                                            <!-- Edit button -->
+                                            <button 
+                                                @click="openEditFileModal(file)" 
+                                                class="p-2 rounded-lg hover:bg-surface-3 transition-colors group"
+                                                title="Edit file"
+                                            >
+                                                <i data-lucide="pencil" class="w-4 h-4 text-muted group-hover:text-accent"></i>
+                                            </button>
+                                            <button 
+                                                @click="downloadFile(file, true)" 
+                                                x-show="downloadProgress[file.id]?.status !== 'downloading'"
+                                                class="p-2 rounded-lg hover:bg-surface-3 transition-colors group"
+                                                title="Re-download"
+                                            >
+                                                <i data-lucide="refresh-cw" class="w-4 h-4 text-muted group-hover:text-accent"></i>
+                                            </button>
+                                            <button 
+                                                @click="deleteFileFromDisk(file)" 
+                                                x-show="fileStatuses[file.id]?.exists"
+                                                class="p-2 rounded-lg hover:bg-danger/10 transition-colors group"
+                                                title="Delete from disk"
+                                            >
+                                                <i data-lucide="hard-drive" class="w-4 h-4 text-muted group-hover:text-danger"></i>
+                                            </button>
+                                            <button 
+                                                @click="removeFileFromConfig(file)" 
+                                                class="p-2 rounded-lg hover:bg-danger/10 transition-colors group"
+                                                title="Remove from config"
+                                            >
+                                                <i data-lucide="x" class="w-4 h-4 text-muted group-hover:text-danger"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                            
+                            <div x-show="!selectedConfig?.files?.length" class="px-6 py-12 text-center">
+                                <i data-lucide="file-plus" class="w-12 h-12 mx-auto mb-4 text-muted opacity-50"></i>
+                                <p class="text-muted">No files in this config</p>
+                                <button @click="showAddFileModal = true" class="mt-4 px-4 py-2 rounded-lg border border-accent/50 text-accent hover:bg-accent/10 transition-all text-sm inline-flex items-center gap-2">
+                                    <i data-lucide="plus" class="w-4 h-4"></i>
+                                    Add your first file
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- New Config Modal -->
+    <div x-show="showNewConfigModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" @keydown.escape.window="showNewConfigModal = false">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showNewConfigModal = false"></div>
+        <div class="glass rounded-2xl p-6 w-full max-w-md relative glow fade-in" @click.stop>
+            <h3 class="text-xl font-bold mb-6">Create New Config</h3>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Config Name</label>
+                    <input 
+                        type="text" 
+                        x-model="newConfig.name"
+                        placeholder="My Downloads"
+                        class="w-full px-4 py-3 rounded-xl bg-surface-2 border border-border focus:border-accent focus:outline-none transition-colors font-mono"
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Root Directory</label>
+                    <input 
+                        type="text" 
+                        x-model="newConfig.rootDirectory"
+                        placeholder="/path/to/downloads"
+                        class="w-full px-4 py-3 rounded-xl bg-surface-2 border border-border focus:border-accent focus:outline-none transition-colors font-mono"
+                    >
+                    <p class="text-xs text-muted mt-2">All files will be relative to this directory</p>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-3 mt-6">
+                <button @click="showNewConfigModal = false" class="px-5 py-2.5 rounded-xl border border-border hover:bg-surface-2 transition-colors">Cancel</button>
+                <button @click="createConfig()" class="btn-primary px-5 py-2.5 rounded-xl font-medium">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Config Modal -->
+    <div x-show="showEditConfigModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" @keydown.escape.window="showEditConfigModal = false">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showEditConfigModal = false"></div>
+        <div class="glass rounded-2xl p-6 w-full max-w-md relative glow fade-in" @click.stop>
+            <h3 class="text-xl font-bold mb-6">Config Settings</h3>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Config Name</label>
+                    <input 
+                        type="text" 
+                        x-model="editConfig.name"
+                        class="w-full px-4 py-3 rounded-xl bg-surface-2 border border-border focus:border-accent focus:outline-none transition-colors font-mono"
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Root Directory</label>
+                    <input 
+                        type="text" 
+                        x-model="editConfig.rootDirectory"
+                        class="w-full px-4 py-3 rounded-xl bg-surface-2 border border-border focus:border-accent focus:outline-none transition-colors font-mono"
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Civitai API Token</label>
+                    <input 
+                        type="password" 
+                        x-model="editConfig.civitaiToken"
+                        placeholder="Enter your Civitai token"
+                        class="w-full px-4 py-3 rounded-xl bg-surface-2 border border-border focus:border-accent focus:outline-none transition-colors font-mono"
+                    >
+                    <p class="text-xs text-muted mt-1">Token will be added to civitai.com URLs automatically</p>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-3 mt-6">
+                <button @click="showEditConfigModal = false" class="px-5 py-2.5 rounded-xl border border-border hover:bg-surface-2 transition-colors">Cancel</button>
+                <button @click="saveConfigSettings()" class="btn-primary px-5 py-2.5 rounded-xl font-medium">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add File Modal -->
+    <div x-show="showAddFileModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" @keydown.escape.window="showAddFileModal = false">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showAddFileModal = false"></div>
+        <div class="glass rounded-2xl p-6 w-full max-w-lg relative glow fade-in max-h-[90vh] overflow-y-auto scrollbar-thin" @click.stop>
+            <h3 class="text-xl font-bold mb-6">Add File</h3>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Download URL</label>
+                    <input 
+                        type="url" 
+                        x-model="newFile.url"
+                        @input="onUrlChange()"
+                        @blur="fetchFileInfo('new')"
+                        placeholder="https://example.com/file.zip"
+                        class="w-full px-4 py-3 rounded-xl bg-surface-2 border border-border focus:border-accent focus:outline-none transition-colors font-mono text-sm"
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Source URL (optional)</label>
+                    <input 
+                        type="url" 
+                        x-model="newFile.sourceUrl"
+                        placeholder="https://civitai.com/models/..."
+                        class="w-full px-4 py-3 rounded-xl bg-surface-2 border border-border focus:border-accent focus:outline-none transition-colors font-mono text-sm"
+                    >
+                    <p class="text-xs text-muted mt-1">Link to model page or source</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Title (display name)</label>
+                    <input 
+                        type="text" 
+                        x-model="newFile.title"
+                        placeholder="My awesome model"
+                        class="w-full px-4 py-3 rounded-xl bg-surface-2 border border-border focus:border-accent focus:outline-none transition-colors"
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Save As (filename)</label>
+                    <div class="flex gap-2">
+                        <input 
+                            type="text" 
+                            x-model="newFile.fileName"
+                            placeholder="file.zip"
+                            class="flex-1 px-4 py-3 rounded-xl bg-surface-2 border border-border focus:border-accent focus:outline-none transition-colors font-mono"
+                        >
+                        <button 
+                            @click="fetchFileInfo('new')"
+                            :disabled="!newFile.url || fetchingFileInfo"
+                            :class="!newFile.url ? 'opacity-50 cursor-not-allowed' : ''"
+                            class="px-4 py-3 rounded-xl border border-border hover:bg-surface-2 transition-colors"
+                            title="Fetch filename from URL"
+                        >
+                            <i data-lucide="refresh-cw" class="w-5 h-5" :class="fetchingFileInfo ? 'animate-spin' : ''"></i>
+                        </button>
+                    </div>
+                    <p class="text-xs text-muted mt-1">Click refresh to auto-detect filename from URL</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Folder (relative to root)</label>
+                    <div class="flex gap-2">
+                        <input 
+                            type="text" 
+                            x-model="newFile.folder"
+                            placeholder="subfolder/path"
+                            class="flex-1 px-4 py-3 rounded-xl bg-surface-2 border border-border focus:border-accent focus:outline-none transition-colors font-mono"
+                        >
+                        <button 
+                            @click="loadFolders()" 
+                            class="px-4 py-3 rounded-xl border border-border hover:bg-surface-2 transition-colors"
+                            title="Browse folders"
+                        >
+                            <i data-lucide="folder-search" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div x-show="availableFolders.length > 0" class="mt-2 max-h-32 overflow-y-auto scrollbar-thin">
+                        <template x-for="folder in availableFolders" :key="folder">
+                            <button 
+                                @click="newFile.folder = folder"
+                                class="block w-full text-left px-3 py-1.5 rounded hover:bg-surface-2 text-sm font-mono text-muted hover:text-white transition-colors"
+                                x-text="folder"
+                            ></button>
+                        </template>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Description</label>
+                    <textarea 
+                        x-model="newFile.description"
+                        placeholder="Add description, links, notes..."
+                        rows="3"
+                        class="w-full px-4 py-3 rounded-xl bg-surface-2 border border-border focus:border-accent focus:outline-none transition-colors resize-none"
+                    ></textarea>
+                </div>
+                <div class="flex items-center gap-3 p-3 rounded-xl bg-surface-2 border border-border">
+                    <input 
+                        type="checkbox" 
+                        id="useTokenNew"
+                        x-model="newFile.useToken"
+                        class="w-5 h-5"
+                    >
+                    <label for="useTokenNew" class="flex-1 cursor-pointer">
+                        <span class="text-sm font-medium">Use Civitai Token</span>
+                        <p class="text-xs text-muted">Append API token to download URL</p>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-3 mt-6">
+                <button @click="showAddFileModal = false; resetNewFile()" class="px-5 py-2.5 rounded-xl border border-border hover:bg-surface-2 transition-colors">Cancel</button>
+                <button @click="addFile()" class="btn-primary px-5 py-2.5 rounded-xl font-medium">Add File</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit File Modal -->
+    <div x-show="showEditFileModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" @keydown.escape.window="showEditFileModal = false">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showEditFileModal = false"></div>
+        <div class="glass rounded-2xl p-6 w-full max-w-lg relative glow fade-in max-h-[90vh] overflow-y-auto scrollbar-thin" @click.stop>
+            <h3 class="text-xl font-bold mb-6">Edit File</h3>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Download URL</label>
+                    <input 
+                        type="url" 
+                        x-model="editFile.url"
+                        @input="onEditUrlChange()"
+                        placeholder="https://example.com/file.zip"
+                        class="w-full px-4 py-3 rounded-xl bg-surface-2 border border-border focus:border-accent focus:outline-none transition-colors font-mono text-sm"
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Source URL (optional)</label>
+                    <input 
+                        type="url" 
+                        x-model="editFile.sourceUrl"
+                        placeholder="https://civitai.com/models/..."
+                        class="w-full px-4 py-3 rounded-xl bg-surface-2 border border-border focus:border-accent focus:outline-none transition-colors font-mono text-sm"
+                    >
+                    <p class="text-xs text-muted mt-1">Link to model page or source</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Title (display name)</label>
+                    <input 
+                        type="text" 
+                        x-model="editFile.title"
+                        placeholder="My awesome model"
+                        class="w-full px-4 py-3 rounded-xl bg-surface-2 border border-border focus:border-accent focus:outline-none transition-colors"
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Save As (filename)</label>
+                    <div class="flex gap-2">
+                        <input 
+                            type="text" 
+                            x-model="editFile.fileName"
+                            placeholder="file.zip"
+                            class="flex-1 px-4 py-3 rounded-xl bg-surface-2 border border-border focus:border-accent focus:outline-none transition-colors font-mono"
+                        >
+                        <button 
+                            @click="fetchFileInfo('edit')"
+                            :disabled="!editFile.url || fetchingFileInfo"
+                            :class="!editFile.url ? 'opacity-50 cursor-not-allowed' : ''"
+                            class="px-4 py-3 rounded-xl border border-border hover:bg-surface-2 transition-colors"
+                            title="Fetch filename from URL"
+                        >
+                            <i data-lucide="refresh-cw" class="w-5 h-5" :class="fetchingFileInfo ? 'animate-spin' : ''"></i>
+                        </button>
+                    </div>
+                    <p class="text-xs text-muted mt-1">Click refresh to auto-detect filename from URL</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Folder (relative to root)</label>
+                    <div class="flex gap-2">
+                        <input 
+                            type="text" 
+                            x-model="editFile.folder"
+                            placeholder="subfolder/path"
+                            class="flex-1 px-4 py-3 rounded-xl bg-surface-2 border border-border focus:border-accent focus:outline-none transition-colors font-mono"
+                        >
+                        <button 
+                            @click="loadFoldersForEdit()" 
+                            class="px-4 py-3 rounded-xl border border-border hover:bg-surface-2 transition-colors"
+                            title="Browse folders"
+                        >
+                            <i data-lucide="folder-search" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div x-show="editFileFolders.length > 0" class="mt-2 max-h-32 overflow-y-auto scrollbar-thin">
+                        <template x-for="folder in editFileFolders" :key="folder">
+                            <button 
+                                @click="editFile.folder = folder"
+                                class="block w-full text-left px-3 py-1.5 rounded hover:bg-surface-2 text-sm font-mono text-muted hover:text-white transition-colors"
+                                x-text="folder"
+                            ></button>
+                        </template>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-muted mb-2">Description</label>
+                    <textarea 
+                        x-model="editFile.description"
+                        placeholder="Add description, links, notes..."
+                        rows="3"
+                        class="w-full px-4 py-3 rounded-xl bg-surface-2 border border-border focus:border-accent focus:outline-none transition-colors resize-none"
+                    ></textarea>
+                </div>
+                <div class="flex items-center gap-3 p-3 rounded-xl bg-surface-2 border border-border">
+                    <input 
+                        type="checkbox" 
+                        id="useTokenEdit"
+                        x-model="editFile.useToken"
+                        class="w-5 h-5"
+                    >
+                    <label for="useTokenEdit" class="flex-1 cursor-pointer">
+                        <span class="text-sm font-medium">Use Civitai Token</span>
+                        <p class="text-xs text-muted">Append API token to download URL</p>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-3 mt-6">
+                <button @click="showEditFileModal = false" class="px-5 py-2.5 rounded-xl border border-border hover:bg-surface-2 transition-colors">Cancel</button>
+                <button @click="saveFileEdit()" class="btn-primary px-5 py-2.5 rounded-xl font-medium">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Description Modal -->
+    <div x-show="showDescriptionModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" @keydown.escape.window="showDescriptionModal = false">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showDescriptionModal = false"></div>
+        <div class="glass rounded-2xl p-6 w-full max-w-lg relative glow fade-in max-h-[80vh] overflow-y-auto scrollbar-thin" @click.stop>
+            <div class="flex items-start justify-between mb-4">
+                <div>
+                    <h3 class="text-xl font-bold" x-text="viewingFile?.title || viewingFile?.fileName"></h3>
+                    <p class="text-sm text-muted font-mono mt-1" x-text="viewingFile?.fileName"></p>
+                </div>
+                <button @click="showDescriptionModal = false" class="p-2 rounded-lg hover:bg-surface-2 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-4">
+                <div x-show="viewingFile?.sourceUrl" class="flex items-center gap-2">
+                    <i data-lucide="link" class="w-4 h-4 text-muted"></i>
+                    <a :href="viewingFile?.sourceUrl" target="_blank" class="text-accent hover:underline text-sm truncate" x-text="viewingFile?.sourceUrl"></a>
+                </div>
+                
+                <div class="prose prose-invert prose-sm max-w-none">
+                    <div class="whitespace-pre-wrap text-sm leading-relaxed" x-html="linkifyText(viewingFile?.description || 'No description')"></div>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-border">
+                <button 
+                    x-show="viewingFile?.sourceUrl"
+                    @click="window.open(viewingFile?.sourceUrl, '_blank')" 
+                    class="px-4 py-2 rounded-xl border border-accent/50 text-accent hover:bg-accent/10 transition-all flex items-center gap-2 text-sm"
+                >
+                    <i data-lucide="external-link" class="w-4 h-4"></i>
+                    Open Source
+                </button>
+                <button @click="showDescriptionModal = false" class="px-5 py-2.5 rounded-xl border border-border hover:bg-surface-2 transition-colors">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="fixed bottom-6 right-6 z-50 space-y-2">
+        <template x-for="toast in toasts" :key="toast.id">
+            <div 
+                class="glass rounded-xl px-5 py-4 flex items-center gap-3 fade-in max-w-sm"
+                :class="{
+                    'border-success/30': toast.type === 'success',
+                    'border-danger/30': toast.type === 'error',
+                    'border-accent/30': toast.type === 'info'
+                }"
+            >
+                <i :data-lucide="toast.type === 'success' ? 'check-circle' : toast.type === 'error' ? 'x-circle' : 'info'" 
+                   :class="toast.type === 'success' ? 'text-success' : toast.type === 'error' ? 'text-danger' : 'text-accent'"
+                   class="w-5 h-5"></i>
+                <p class="text-sm" x-text="toast.message"></p>
+            </div>
+        </template>
+    </div>
+
+    <script>
+        function app() {
+            return {
+                configs: [],
+                selectedConfigName: null,
+                selectedConfig: null,
+                selectedFiles: [],
+                selectAll: false,
+                fileStatuses: {},
+                downloadProgress: {},
+                availableFolders: [],
+                editFileFolders: [],
+                toasts: [],
+                
+                showNewConfigModal: false,
+                showEditConfigModal: false,
+                showAddFileModal: false,
+                showEditFileModal: false,
+                
+                newConfig: { name: '', rootDirectory: '', civitaiToken: '' },
+                editConfig: { name: '', rootDirectory: '', civitaiToken: '' },
+                newFile: { url: '', fileName: '', folder: '', title: '', description: '', sourceUrl: '', useToken: false },
+                editFile: { id: '', url: '', fileName: '', folder: '', title: '', description: '', sourceUrl: '', useToken: false },
+                
+                fetchingFileInfo: false,
+                showDescriptionModal: false,
+                viewingFile: null,
+                
+                eventSource: null,
+                
+                async init() {
+                    await this.loadConfigs();
+                    this.setupSSE();
+                    this.$nextTick(() => lucide.createIcons());
+                },
+                
+                setupSSE() {
+                    this.eventSource = new EventSource('/api/progress/stream');
+                    this.eventSource.onmessage = (event) => {
+                        const progress = JSON.parse(event.data);
+                        this.downloadProgress[progress.fileId] = progress;
+                        if (progress.status === 'completed') {
+                            this.checkFileStatuses();
+                        }
+                        this.$nextTick(() => lucide.createIcons());
+                    };
+                },
+                
+                async loadConfigs() {
+                    try {
+                        const res = await fetch('/api/configs');
+                        this.configs = await res.json() || [];
+                    } catch (e) {
+                        this.toast('Failed to load configs', 'error');
+                    }
+                },
+                
+                async selectConfig(name) {
+                    try {
+                        const res = await fetch(`/api/config?name=${encodeURIComponent(name)}`);
+                        if (!res.ok) throw new Error('Config not found');
+                        this.selectedConfig = await res.json();
+                        this.selectedConfigName = name;
+                        this.selectedFiles = [];
+                        this.selectAll = false;
+                        this.downloadProgress = {};
+                        await this.checkFileStatuses();
+                        this.$nextTick(() => lucide.createIcons());
+                    } catch (e) {
+                        this.toast('Failed to load config', 'error');
+                    }
+                },
+                
+                async checkFileStatuses() {
+                    if (!this.selectedConfig?.files?.length) return;
+                    try {
+                        const res = await fetch('/api/files/status', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                rootDir: this.selectedConfig.rootDirectory,
+                                files: this.selectedConfig.files
+                            })
+                        });
+                        const data = await res.json();
+                        this.fileStatuses = data.statuses || {};
+                    } catch (e) {
+                        console.error('Failed to check file statuses:', e);
+                    }
+                },
+                
+                async createConfig() {
+                    if (!this.newConfig.name) {
+                        this.toast('Config name is required', 'error');
+                        return;
+                    }
+                    try {
+                        const configName = this.newConfig.name;
+                        const res = await fetch('/api/config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                name: configName,
+                                rootDirectory: this.newConfig.rootDirectory,
+                                files: []
+                            })
+                        });
+                        if (!res.ok) throw new Error('Failed to create config');
+                        this.showNewConfigModal = false;
+                        this.newConfig = { name: '', rootDirectory: '' };
+                        await this.loadConfigs();
+                        await this.selectConfig(configName);
+                        this.toast('Config created', 'success');
+                    } catch (e) {
+                        this.toast(e.message, 'error');
+                    }
+                },
+                
+                openEditConfigModal() {
+                    if (!this.selectedConfig) return;
+                    this.editConfig = {
+                        name: this.selectedConfig.name,
+                        rootDirectory: this.selectedConfig.rootDirectory,
+                        civitaiToken: this.selectedConfig.civitaiToken || ''
+                    };
+                    this.showEditConfigModal = true;
+                },
+                
+                async saveConfigSettings() {
+                    if (!this.selectedConfig) return;
+                    try {
+                        const oldName = this.selectedConfigName;
+                        const newName = this.editConfig.name;
+                        
+                        // Delete old config if name changed
+                        if (oldName !== newName) {
+                            await fetch(`/api/config?name=${encodeURIComponent(oldName)}`, { method: 'DELETE' });
+                        }
+                        
+                        // Update local config
+                        this.selectedConfig.name = newName;
+                        this.selectedConfig.rootDirectory = this.editConfig.rootDirectory;
+                        this.selectedConfig.civitaiToken = this.editConfig.civitaiToken;
+                        
+                        // Save new config
+                        await fetch('/api/config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.selectedConfig)
+                        });
+                        
+                        this.showEditConfigModal = false;
+                        this.selectedConfigName = newName;
+                        await this.loadConfigs();
+                        await this.checkFileStatuses();
+                        this.toast('Config saved', 'success');
+                    } catch (e) {
+                        this.toast('Failed to save config', 'error');
+                    }
+                },
+                
+                async deleteConfig() {
+                    if (!confirm('Delete this config?')) return;
+                    try {
+                        await fetch(`/api/config?name=${encodeURIComponent(this.selectedConfigName)}`, { method: 'DELETE' });
+                        this.selectedConfig = null;
+                        this.selectedConfigName = null;
+                        await this.loadConfigs();
+                        this.toast('Config deleted', 'success');
+                    } catch (e) {
+                        this.toast('Failed to delete config', 'error');
+                    }
+                },
+                
+                // Sanitize filename - replace slashes with dashes
+                sanitizeFileName(name) {
+                    return name.replace(/[\/\\]/g, '-').replace(/[<>:"|?*]/g, '_');
+                },
+                
+                async addFile() {
+                    if (!this.newFile.url || !this.newFile.fileName) {
+                        this.toast('URL and filename are required', 'error');
+                        return;
+                    }
+                    
+                    const file = {
+                        id: crypto.randomUUID(),
+                        url: this.newFile.url,
+                        fileName: this.sanitizeFileName(this.newFile.fileName),
+                        folder: this.newFile.folder || '',
+                        title: this.newFile.title || '',
+                        description: this.newFile.description || '',
+                        sourceUrl: this.newFile.sourceUrl || '',
+                        useToken: this.newFile.useToken
+                    };
+                    
+                    if (!this.selectedConfig.files) {
+                        this.selectedConfig.files = [];
+                    }
+                    this.selectedConfig.files.push(file);
+                    
+                    try {
+                        await fetch('/api/config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.selectedConfig)
+                        });
+                        this.showAddFileModal = false;
+                        this.resetNewFile();
+                        await this.checkFileStatuses();
+                        this.$nextTick(() => lucide.createIcons());
+                        this.toast('File added', 'success');
+                    } catch (e) {
+                        this.toast('Failed to add file', 'error');
+                    }
+                },
+                
+                openEditFileModal(file) {
+                    this.editFile = {
+                        id: file.id,
+                        url: file.url,
+                        fileName: file.fileName,
+                        folder: file.folder || '',
+                        title: file.title || '',
+                        description: file.description || '',
+                        sourceUrl: file.sourceUrl || '',
+                        useToken: file.useToken || false
+                    };
+                    this.editFileFolders = [];
+                    this.showEditFileModal = true;
+                    this.$nextTick(() => lucide.createIcons());
+                },
+                
+                async saveFileEdit() {
+                    if (!this.editFile.url || !this.editFile.fileName) {
+                        this.toast('URL and filename are required', 'error');
+                        return;
+                    }
+                    
+                    const index = this.selectedConfig.files.findIndex(f => f.id === this.editFile.id);
+                    if (index === -1) {
+                        this.toast('File not found', 'error');
+                        return;
+                    }
+                    
+                    this.selectedConfig.files[index] = {
+                        id: this.editFile.id,
+                        url: this.editFile.url,
+                        fileName: this.sanitizeFileName(this.editFile.fileName),
+                        folder: this.editFile.folder || '',
+                        title: this.editFile.title || '',
+                        description: this.editFile.description || '',
+                        sourceUrl: this.editFile.sourceUrl || '',
+                        useToken: this.editFile.useToken
+                    };
+                    
+                    try {
+                        await fetch('/api/config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.selectedConfig)
+                        });
+                        this.showEditFileModal = false;
+                        await this.checkFileStatuses();
+                        this.toast('File updated', 'success');
+                    } catch (e) {
+                        this.toast('Failed to update file', 'error');
+                    }
+                },
+                
+                async loadFoldersForEdit() {
+                    if (!this.selectedConfig?.rootDirectory) {
+                        this.toast('Set root directory first', 'error');
+                        return;
+                    }
+                    try {
+                        const res = await fetch(`/api/folders?root=${encodeURIComponent(this.selectedConfig.rootDirectory)}`);
+                        this.editFileFolders = await res.json() || [];
+                    } catch (e) {
+                        this.toast('Failed to load folders', 'error');
+                    }
+                },
+                
+                async removeFileFromConfig(file) {
+                    if (!confirm(`Remove "${file.fileName}" from config?`)) return;
+                    this.selectedConfig.files = this.selectedConfig.files.filter(f => f.id !== file.id);
+                    try {
+                        await fetch('/api/config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.selectedConfig)
+                        });
+                        this.toast('File removed from config', 'success');
+                    } catch (e) {
+                        this.toast('Failed to remove file', 'error');
+                    }
+                },
+                
+                async deleteFileFromDisk(file) {
+                    if (!confirm(`Delete "${file.fileName}" from disk?`)) return;
+                    try {
+                        await fetch('/api/file', {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                rootDir: this.selectedConfig.rootDirectory,
+                                folder: file.folder,
+                                fileName: file.fileName
+                            })
+                        });
+                        await this.checkFileStatuses();
+                        this.toast('File deleted from disk', 'success');
+                    } catch (e) {
+                        this.toast('Failed to delete file', 'error');
+                    }
+                },
+                
+                async downloadFile(file, force = false) {
+                    try {
+                        await fetch('/api/download', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                rootDir: this.selectedConfig.rootDirectory,
+                                token: this.selectedConfig.civitaiToken || '',
+                                files: [file],
+                                force: force
+                            })
+                        });
+                    } catch (e) {
+                        this.toast('Failed to start download', 'error');
+                    }
+                },
+                
+                async cancelDownload(fileId) {
+                    try {
+                        await fetch(`/api/download/cancel?id=${encodeURIComponent(fileId)}`, {
+                            method: 'POST'
+                        });
+                        this.toast('Download stopped', 'info');
+                    } catch (e) {
+                        this.toast('Failed to stop download', 'error');
+                    }
+                },
+                
+                async downloadSelected(force = false) {
+                    if (!this.selectedFiles.length) return;
+                    const files = this.selectedConfig.files.filter(f => this.selectedFiles.includes(f.id));
+                    try {
+                        await fetch('/api/download', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                rootDir: this.selectedConfig.rootDirectory,
+                                token: this.selectedConfig.civitaiToken || '',
+                                files: files,
+                                force: force
+                            })
+                        });
+                        this.toast(`Downloading ${files.length} files...`, 'info');
+                    } catch (e) {
+                        this.toast('Failed to start downloads', 'error');
+                    }
+                },
+                
+                toggleSelectAll() {
+                    if (this.selectAll) {
+                        this.selectedFiles = this.selectedConfig?.files?.map(f => f.id) || [];
+                    } else {
+                        this.selectedFiles = [];
+                    }
+                },
+                
+                async loadFolders() {
+                    if (!this.selectedConfig?.rootDirectory) {
+                        this.toast('Set root directory first', 'error');
+                        return;
+                    }
+                    try {
+                        const res = await fetch(`/api/folders?root=${encodeURIComponent(this.selectedConfig.rootDirectory)}`);
+                        this.availableFolders = await res.json() || [];
+                    } catch (e) {
+                        this.toast('Failed to load folders', 'error');
+                    }
+                },
+                
+                async exportConfig() {
+                    window.location.href = `/api/config/export?name=${encodeURIComponent(this.selectedConfigName)}`;
+                },
+                
+                async importConfig(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    
+                    try {
+                        const text = await file.text();
+                        const cfg = JSON.parse(text);
+                        
+                        const res = await fetch('/api/config/import', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: text
+                        });
+                        
+                        if (!res.ok) throw new Error('Failed to import');
+                        const data = await res.json();
+                        
+                        await this.loadConfigs();
+                        await this.selectConfig(data.name);
+                        this.toast('Config imported', 'success');
+                    } catch (e) {
+                        this.toast('Failed to import config', 'error');
+                    }
+                    
+                    event.target.value = '';
+                },
+                
+                autoFillFileName() {
+                    if (this.newFile.url && !this.newFile.fileName) {
+                        try {
+                            const url = new URL(this.newFile.url);
+                            const path = url.pathname;
+                            const fileName = path.split('/').pop();
+                            if (fileName) {
+                                this.newFile.fileName = decodeURIComponent(fileName);
+                            }
+                        } catch (e) {}
+                    }
+                },
+                
+                // Check if URL is from civitai.com
+                isCivitaiUrl(url) {
+                    try {
+                        const parsed = new URL(url);
+                        return parsed.host.toLowerCase().includes('civitai.com');
+                    } catch (e) {
+                        return url.toLowerCase().includes('civitai.com');
+                    }
+                },
+                
+                onUrlChange() {
+                    this.autoFillFileName();
+                    // Auto-enable token for civitai URLs
+                    if (this.newFile.url && this.isCivitaiUrl(this.newFile.url)) {
+                        this.newFile.useToken = true;
+                    }
+                },
+                
+                onEditUrlChange() {
+                    // Auto-enable token for civitai URLs if changing URL
+                    if (this.editFile.url && this.isCivitaiUrl(this.editFile.url)) {
+                        this.editFile.useToken = true;
+                    }
+                },
+                
+                async fetchFileInfo(mode) {
+                    const url = mode === 'new' ? this.newFile.url : this.editFile.url;
+                    if (!url) return;
+                    
+                    this.fetchingFileInfo = true;
+                    try {
+                        const token = this.selectedConfig?.civitaiToken || '';
+                        const res = await fetch(`/api/file-info?url=${encodeURIComponent(url)}&token=${encodeURIComponent(token)}`);
+                        const data = await res.json();
+                        if (data.fileName && data.fileName.length > 0) {
+                            if (mode === 'new') {
+                                this.newFile.fileName = data.fileName;
+                            } else {
+                                this.editFile.fileName = data.fileName;
+                            }
+                            this.toast('Filename detected: ' + data.fileName, 'success');
+                        } else {
+                            this.toast('Could not detect filename', 'error');
+                        }
+                    } catch (e) {
+                        this.toast('Failed to fetch file info', 'error');
+                    }
+                    this.fetchingFileInfo = false;
+                    this.$nextTick(() => lucide.createIcons());
+                },
+                
+                openDescriptionModal(file) {
+                    this.viewingFile = file;
+                    this.showDescriptionModal = true;
+                    this.$nextTick(() => lucide.createIcons());
+                },
+                
+                openSourceUrl(file) {
+                    if (file.sourceUrl) {
+                        window.open(file.sourceUrl, '_blank');
+                    }
+                },
+                
+                resetNewFile() {
+                    this.newFile = { url: '', fileName: '', folder: '', title: '', description: '', sourceUrl: '', useToken: false };
+                    this.availableFolders = [];
+                },
+                
+                formatSize(bytes) {
+                    if (!bytes || bytes === 0) return '-';
+                    const units = ['B', 'KB', 'MB', 'GB'];
+                    let i = 0;
+                    while (bytes >= 1024 && i < units.length - 1) {
+                        bytes /= 1024;
+                        i++;
+                    }
+                    return `${bytes.toFixed(1)} ${units[i]}`;
+                },
+                
+                formatSpeed(bytesPerSec) {
+                    if (!bytesPerSec || bytesPerSec === 0) return '0 B/s';
+                    const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+                    let i = 0;
+                    while (bytesPerSec >= 1024 && i < units.length - 1) {
+                        bytesPerSec /= 1024;
+                        i++;
+                    }
+                    return `${bytesPerSec.toFixed(1)} ${units[i]}`;
+                },
+                
+                // Convert URLs in text to clickable links
+                linkifyText(text) {
+                    if (!text) return '';
+                    // Escape HTML first
+                    const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    // Convert URLs to links
+                    const urlRegex = /(https?:\/\/[^\s<]+)/g;
+                    return escaped.replace(urlRegex, '<a href="$1" target="_blank" class="text-accent hover:underline" onclick="event.stopPropagation()">$1</a>');
+                },
+                
+                toast(message, type = 'info') {
+                    const id = Date.now();
+                    this.toasts.push({ id, message, type });
+                    this.$nextTick(() => lucide.createIcons());
+                    setTimeout(() => {
+                        this.toasts = this.toasts.filter(t => t.id !== id);
+                    }, 3000);
+                }
+            };
+        }
+    </script>
+</body>
+</html>

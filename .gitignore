@@ -1,0 +1,23 @@
+# Compiled binary
+multy-loader
+multy-loader.exe
+multy-loader-linux
+multy-loader-darwin
+multy-loader-windows.exe
+
+# Config files (user data)
+configs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+files/
+
