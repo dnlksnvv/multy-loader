@@ -9,16 +9,23 @@ import (
 	"sync"
 )
 
+// ExtractedFile represents a file extracted from an archive
+type ExtractedFile struct {
+	Name string `json:"name"` // Relative path within archive
+	Size int64  `json:"size"` // File size in bytes
+}
+
 // FileEntry represents a single file in the config
 type FileEntry struct {
-	ID          string `json:"id"`
-	URL         string `json:"url"`
-	FileName    string `json:"fileName"`
-	Folder      string `json:"folder"`      // Relative to root directory
-	Title       string `json:"title"`       // Human-readable title
-	Description string `json:"description"` // Description with clickable links
-	SourceURL   string `json:"sourceUrl"`   // Link to source page (e.g. model page)
-	UseToken    bool   `json:"useToken"`    // Whether to append auth token to URL
+	ID             string          `json:"id"`
+	URL            string          `json:"url"`
+	FileName       string          `json:"fileName"`
+	Folder         string          `json:"folder"`         // Relative to root directory
+	Title          string          `json:"title"`          // Human-readable title
+	Description    string          `json:"description"`    // Description with clickable links
+	SourceURL      string          `json:"sourceUrl"`      // Link to source page (e.g. model page)
+	UseToken       bool            `json:"useToken"`       // Whether to append auth token to URL
+	ExtractedFiles []ExtractedFile `json:"extractedFiles"` // List of files extracted from archive
 }
 
 // Config represents a download configuration

@@ -229,6 +229,77 @@ func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, map[string]string{"status": "ok"})
 }
 
+// ExtractRequest for extracting archive
+type ExtractRequest struct {
+	RootDir  string `json:"rootDir"`
+	Folder   string `json:"folder"`
+	FileName string `json:"fileName"`
+}
+
+// ExtractArchive extracts an archive file
+func (h *Handler) ExtractArchive(w http.ResponseWriter, r *http.Request) {
+	var req ExtractRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		errorResponse(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	if !downloader.IsArchive(req.FileName) {
+		errorResponse(w, http.StatusBadRequest, "file is not a supported archive")
+		return
+	}
+
+	extracted, err := h.downloader.ExtractArchive(req.RootDir, req.Folder, req.FileName)
+	if err != nil {
+		errorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Convert to config.ExtractedFile format
+	extractedFiles := make([]config.ExtractedFile, len(extracted))
+	for i, e := range extracted {
+		extractedFiles[i] = config.ExtractedFile{
+			Name: e.Name,
+			Size: e.Size,
+		}
+	}
+
+	jsonResponse(w, map[string]interface{}{
+		"status":    "ok",
+		"extracted": extractedFiles,
+	})
+}
+
+// DeleteExtractedFileRequest for deleting an extracted file
+type DeleteExtractedFileRequest struct {
+	RootDir  string `json:"rootDir"`
+	Folder   string `json:"folder"`
+	FileName string `json:"fileName"` // Path to extracted file relative to folder
+}
+
+// DeleteExtractedFile deletes an extracted file from disk
+func (h *Handler) DeleteExtractedFile(w http.ResponseWriter, r *http.Request) {
+	var req DeleteExtractedFileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		errorResponse(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	if err := h.downloader.DeleteExtractedFile(req.RootDir, req.Folder, req.FileName); err != nil {
+		errorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	jsonResponse(w, map[string]string{"status": "ok"})
+}
+
+// CheckArchive checks if file is an archive
+func (h *Handler) CheckArchive(w http.ResponseWriter, r *http.Request) {
+	fileName := r.URL.Query().Get("fileName")
+	isArchive := downloader.IsArchive(fileName)
+	jsonResponse(w, map[string]bool{"isArchive": isArchive})
+}
+
 // SSE endpoint for real-time progress updates
 func (h *Handler) ProgressStream(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)

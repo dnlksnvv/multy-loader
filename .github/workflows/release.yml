@@ -40,3 +40,4 @@ jobs:
             multy-loader-darwin-arm64
           generate_release_notes: true
 
+

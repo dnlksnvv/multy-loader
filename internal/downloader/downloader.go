@@ -1,6 +1,9 @@
 package downloader
 
 import (
+	"archive/tar"
+	"archive/zip"
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -505,5 +508,179 @@ func extractFileNameFromURL(rawURL string) string {
 		return decoded
 	}
 	return ""
+}
+
+// IsArchive checks if file is an archive based on extension
+func IsArchive(fileName string) bool {
+	lower := strings.ToLower(fileName)
+	return strings.HasSuffix(lower, ".zip") ||
+		strings.HasSuffix(lower, ".tar") ||
+		strings.HasSuffix(lower, ".tar.gz") ||
+		strings.HasSuffix(lower, ".tgz")
+}
+
+// ExtractedFileInfo contains info about extracted file
+type ExtractedFileInfo struct {
+	Name string `json:"name"`
+	Size int64  `json:"size"`
+}
+
+// ExtractArchive extracts an archive and returns list of extracted files with sizes
+func (d *Downloader) ExtractArchive(rootDir, folder, fileName string) ([]ExtractedFileInfo, error) {
+	archivePath := filepath.Join(config.ExpandPath(rootDir), folder, fileName)
+	extractDir := filepath.Join(config.ExpandPath(rootDir), folder)
+
+	lower := strings.ToLower(fileName)
+
+	if strings.HasSuffix(lower, ".zip") {
+		return extractZip(archivePath, extractDir)
+	}
+
+	if strings.HasSuffix(lower, ".tar.gz") || strings.HasSuffix(lower, ".tgz") {
+		return extractTarGz(archivePath, extractDir)
+	}
+
+	if strings.HasSuffix(lower, ".tar") {
+		return extractTar(archivePath, extractDir)
+	}
+
+	return nil, fmt.Errorf("unsupported archive format")
+}
+
+// DeleteExtractedFile deletes an extracted file from disk
+func (d *Downloader) DeleteExtractedFile(rootDir, folder, fileName string) error {
+	fullPath := filepath.Join(config.ExpandPath(rootDir), folder, fileName)
+	return os.Remove(fullPath)
+}
+
+func extractZip(archivePath, extractDir string) ([]ExtractedFileInfo, error) {
+	r, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open zip: %w", err)
+	}
+	defer r.Close()
+
+	var extracted []ExtractedFileInfo
+
+	for _, f := range r.File {
+		// Skip directories
+		if f.FileInfo().IsDir() {
+			continue
+		}
+
+		// Security: prevent path traversal
+		destPath := filepath.Join(extractDir, f.Name)
+		if !strings.HasPrefix(destPath, filepath.Clean(extractDir)+string(os.PathSeparator)) {
+			continue // Skip files that would escape extract directory
+		}
+
+		// Create directory structure
+		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+			return extracted, err
+		}
+
+		// Extract file
+		rc, err := f.Open()
+		if err != nil {
+			return extracted, err
+		}
+
+		outFile, err := os.Create(destPath)
+		if err != nil {
+			rc.Close()
+			return extracted, err
+		}
+
+		written, err := io.Copy(outFile, rc)
+		outFile.Close()
+		rc.Close()
+
+		if err != nil {
+			return extracted, err
+		}
+
+		extracted = append(extracted, ExtractedFileInfo{
+			Name: f.Name,
+			Size: written,
+		})
+	}
+
+	return extracted, nil
+}
+
+func extractTarGz(archivePath, extractDir string) ([]ExtractedFileInfo, error) {
+	file, err := os.Open(archivePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	gzr, err := gzip.NewReader(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
+	}
+	defer gzr.Close()
+
+	return extractTarReader(tar.NewReader(gzr), extractDir)
+}
+
+func extractTar(archivePath, extractDir string) ([]ExtractedFileInfo, error) {
+	file, err := os.Open(archivePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	return extractTarReader(tar.NewReader(file), extractDir)
+}
+
+func extractTarReader(tr *tar.Reader, extractDir string) ([]ExtractedFileInfo, error) {
+	var extracted []ExtractedFileInfo
+
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return extracted, err
+		}
+
+		// Skip directories
+		if header.Typeflag == tar.TypeDir {
+			continue
+		}
+
+		// Security: prevent path traversal
+		destPath := filepath.Join(extractDir, header.Name)
+		if !strings.HasPrefix(destPath, filepath.Clean(extractDir)+string(os.PathSeparator)) {
+			continue
+		}
+
+		// Create directory structure
+		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+			return extracted, err
+		}
+
+		// Extract file
+		outFile, err := os.Create(destPath)
+		if err != nil {
+			return extracted, err
+		}
+
+		written, err := io.Copy(outFile, tr)
+		outFile.Close()
+
+		if err != nil {
+			return extracted, err
+		}
+
+		extracted = append(extracted, ExtractedFileInfo{
+			Name: header.Name,
+			Size: written,
+		})
+	}
+
+	return extracted, nil
 }
 

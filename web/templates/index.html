@@ -377,6 +377,22 @@
                                             >
                                                 <i data-lucide="refresh-cw" class="w-4 h-4 text-muted group-hover:text-accent"></i>
                                             </button>
+                                            <!-- Extract archive button -->
+                                            <button 
+                                                @click.stop="extractArchive(file)" 
+                                                x-show="fileStatuses[file.id]?.exists && isArchive(file.fileName) && !extracting[file.id]"
+                                                class="p-2 rounded-lg hover:bg-accent/10 transition-colors group"
+                                                title="Extract archive"
+                                            >
+                                                <i data-lucide="archive" class="w-4 h-4 text-muted group-hover:text-accent"></i>
+                                            </button>
+                                            <button 
+                                                x-show="extracting[file.id]"
+                                                class="p-2 rounded-lg"
+                                                disabled
+                                            >
+                                                <i data-lucide="loader" class="w-4 h-4 text-accent animate-spin"></i>
+                                            </button>
                                             <button 
                                                 @click="deleteFileFromDisk(file)" 
                                                 x-show="fileStatuses[file.id]?.exists"
@@ -392,6 +408,30 @@
                                             >
                                                 <i data-lucide="x" class="w-4 h-4 text-muted group-hover:text-danger"></i>
                                             </button>
+                                        </div>
+                                    </div>
+                                    <!-- Extracted files list -->
+                                    <div x-show="file.extractedFiles?.length > 0" class="mt-3 ml-8 pl-4 border-l-2 border-accent/30">
+                                        <p class="text-xs text-muted mb-2 flex items-center gap-1">
+                                            <i data-lucide="folder-open" class="w-3 h-3"></i>
+                                            <span x-text="`Extracted ${file.extractedFiles.length} files:`"></span>
+                                        </p>
+                                        <div class="space-y-1.5 max-h-48 overflow-y-auto scrollbar-thin">
+                                            <template x-for="(extractedFile, idx) in file.extractedFiles" :key="idx">
+                                                <div class="flex items-center justify-between gap-2 group hover:bg-surface-2/50 rounded px-2 py-1 transition-colors">
+                                                    <div class="flex-1 min-w-0">
+                                                        <p class="text-xs font-mono text-muted/90 truncate" x-text="typeof extractedFile === 'string' ? extractedFile : (extractedFile.name || '')"></p>
+                                                        <p x-show="extractedFile.size" class="text-xs text-muted/70" x-text="formatSize(extractedFile.size || 0)"></p>
+                                                    </div>
+                                                    <button 
+                                                        @click.stop="deleteExtractedFile(file, typeof extractedFile === 'string' ? extractedFile : extractedFile.name)"
+                                                        class="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-danger/10 transition-all"
+                                                        title="Delete file"
+                                                    >
+                                                        <i data-lucide="x" class="w-3 h-3 text-muted hover:text-danger"></i>
+                                                    </button>
+                                                </div>
+                                            </template>
                                         </div>
                                     </div>
                                 </div>
@@ -803,6 +843,7 @@
                 fetchingFileInfo: false,
                 showDescriptionModal: false,
                 viewingFile: null,
+                extracting: {},
                 
                 eventSource: null,
                 
@@ -1304,6 +1345,91 @@
                     // Convert URLs to links
                     const urlRegex = /(https?:\/\/[^\s<]+)/g;
                     return escaped.replace(urlRegex, '<a href="$1" target="_blank" class="text-accent hover:underline" onclick="event.stopPropagation()">$1</a>');
+                },
+                
+                // Check if file is an archive
+                isArchive(fileName) {
+                    if (!fileName) return false;
+                    const lower = fileName.toLowerCase();
+                    return lower.endsWith('.zip') || 
+                           lower.endsWith('.tar') || 
+                           lower.endsWith('.tar.gz') || 
+                           lower.endsWith('.tgz');
+                },
+                
+                // Save current config
+                async saveConfig() {
+                    if (!this.selectedConfig) return;
+                    try {
+                        await fetch('/api/config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.selectedConfig)
+                        });
+                    } catch (e) {
+                        this.toast('Failed to save config', 'error');
+                        throw e;
+                    }
+                },
+                
+                // Extract archive
+                async extractArchive(file) {
+                    if (!this.selectedConfig || this.extracting[file.id]) return;
+                    
+                    this.extracting[file.id] = true;
+                    try {
+                        const res = await fetch('/api/extract', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                rootDir: this.selectedConfig.rootDirectory,
+                                folder: file.folder,
+                                fileName: file.fileName
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.error) {
+                            this.toast(data.error, 'error');
+                        } else {
+                            // Update file with extracted files list
+                            file.extractedFiles = data.extracted || [];
+                            await this.saveConfig();
+                            this.toast(`Extracted ${data.extracted.length} files`, 'success');
+                        }
+                    } catch (e) {
+                        this.toast('Failed to extract archive: ' + (e.message || 'unknown error'), 'error');
+                    }
+                    this.extracting[file.id] = false;
+                    this.$nextTick(() => lucide.createIcons());
+                },
+                
+                // Delete extracted file
+                async deleteExtractedFile(file, extractedFileName) {
+                    if (!confirm(`Delete extracted file "${extractedFileName}"?`)) return;
+                    
+                    try {
+                        const res = await fetch('/api/extract/delete', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                rootDir: this.selectedConfig.rootDirectory,
+                                folder: file.folder,
+                                fileName: extractedFileName
+                            })
+                        });
+                        
+                        if (res.ok) {
+                            // Remove from config
+                            file.extractedFiles = file.extractedFiles.filter(f => f.name !== extractedFileName);
+                            await this.saveConfig();
+                            this.toast('File deleted', 'success');
+                        } else {
+                            const data = await res.json();
+                            this.toast(data.error || 'Failed to delete file', 'error');
+                        }
+                    } catch (e) {
+                        this.toast('Failed to delete file', 'error');
+                    }
                 },
                 
                 toast(message, type = 'info') {

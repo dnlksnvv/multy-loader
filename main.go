@@ -61,6 +61,9 @@ func main() {
 	mux.HandleFunc("/api/progress", h.GetProgress)
 	mux.HandleFunc("/api/progress/stream", h.ProgressStream)
 	mux.HandleFunc("/api/file", h.FileHandler)
+	mux.HandleFunc("/api/extract", h.ExtractArchive)
+	mux.HandleFunc("/api/extract/delete", h.DeleteExtractedFile)
+	mux.HandleFunc("/api/is-archive", h.CheckArchive)
 
 	// Serve embedded static files
 	templatesFS, err := fs.Sub(webFS, "web/templates")
