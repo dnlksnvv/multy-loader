@@ -21,14 +21,14 @@ import (
 
 // Progress represents download progress
 type Progress struct {
-	FileID      string  `json:"fileId"`
-	FileName    string  `json:"fileName"`
-	Total       int64   `json:"total"`
-	Downloaded  int64   `json:"downloaded"`
-	Percent     float64 `json:"percent"`
-	Speed       float64 `json:"speed"` // bytes per second
-	Status      string  `json:"status"` // "downloading", "completed", "error", "cancelled"
-	Error       string  `json:"error,omitempty"`
+	FileID     string  `json:"fileId"`
+	FileName   string  `json:"fileName"`
+	Total      int64   `json:"total"`
+	Downloaded int64   `json:"downloaded"`
+	Percent    float64 `json:"percent"`
+	Speed      float64 `json:"speed"`  // bytes per second
+	Status     string  `json:"status"` // "downloading", "completed", "error", "cancelled"
+	Error      string  `json:"error,omitempty"`
 }
 
 // FileStatus represents the status of a file on disk
@@ -214,6 +214,11 @@ func (d *Downloader) Download(ctx context.Context, entry config.FileEntry, rootD
 	var downloaded int64
 	buf := make([]byte, 32*1024) // 32KB buffer
 
+	// Throttle progress updates (update max once per 200ms or 1% change)
+	lastUpdate := time.Now()
+	lastPercent := float64(0)
+	updateInterval := 200 * time.Millisecond
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -240,7 +245,7 @@ func (d *Downloader) Download(ctx context.Context, entry config.FileEntry, rootD
 			}
 			downloaded += int64(n)
 
-			// Update progress
+			// Calculate progress
 			elapsed := time.Since(startTime).Seconds()
 			var percent float64
 			if total > 0 {
@@ -251,11 +256,20 @@ func (d *Downloader) Download(ctx context.Context, entry config.FileEntry, rootD
 				speed = float64(downloaded) / elapsed
 			}
 
-			d.updateProgress(entry.ID, func(p *Progress) {
-				p.Downloaded = downloaded
-				p.Percent = percent
-				p.Speed = speed
-			})
+			// Throttle updates: only update if enough time passed or significant change
+			now := time.Now()
+			percentChanged := percent - lastPercent
+			shouldUpdate := now.Sub(lastUpdate) >= updateInterval || percentChanged >= 1.0 || percentChanged <= -1.0
+
+			if shouldUpdate {
+				d.updateProgress(entry.ID, func(p *Progress) {
+					p.Downloaded = downloaded
+					p.Percent = percent
+					p.Speed = speed
+				})
+				lastUpdate = now
+				lastPercent = percent
+			}
 		}
 
 		if err == io.EOF {
@@ -334,7 +348,7 @@ func appendToken(rawURL string, token string) string {
 		}
 		return rawURL + "?token=" + token
 	}
-	
+
 	q := parsed.Query()
 	q.Set("token", token)
 	parsed.RawQuery = q.Encode()
@@ -454,11 +468,11 @@ func parseContentDisposition(header string) string {
 	// Handle: attachment; filename="file.zip"
 	// Handle: attachment; filename=file.zip
 	// Handle: attachment; filename*=UTF-8''file.zip
-	
+
 	parts := strings.Split(header, ";")
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
-		
+
 		// Check for filename*= (RFC 5987)
 		if strings.HasPrefix(strings.ToLower(part), "filename*=") {
 			value := part[10:]
@@ -473,7 +487,7 @@ func parseContentDisposition(header string) string {
 			}
 			return strings.Trim(value, "\"'")
 		}
-		
+
 		// Check for filename=
 		if strings.HasPrefix(strings.ToLower(part), "filename=") {
 			value := part[9:]
@@ -499,7 +513,7 @@ func extractFileNameFromURL(rawURL string) string {
 		}
 		return ""
 	}
-	
+
 	path := parsed.Path
 	parts := strings.Split(path, "/")
 	if len(parts) > 0 {
@@ -683,4 +697,3 @@ func extractTarReader(tr *tar.Reader, extractDir string) ([]ExtractedFileInfo, e
 
 	return extracted, nil
 }
-

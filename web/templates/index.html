@@ -854,14 +854,47 @@
                 },
                 
                 setupSSE() {
+                    if (this.eventSource) {
+                        this.eventSource.close();
+                    }
+                    
                     this.eventSource = new EventSource('/api/progress/stream');
+                    
                     this.eventSource.onmessage = (event) => {
-                        const progress = JSON.parse(event.data);
-                        this.downloadProgress[progress.fileId] = progress;
-                        if (progress.status === 'completed') {
-                            this.checkFileStatuses();
+                        // Skip heartbeat comments
+                        if (event.data.trim() === '' || event.data.startsWith(':')) {
+                            return;
                         }
-                        this.$nextTick(() => lucide.createIcons());
+                        
+                        try {
+                            const data = JSON.parse(event.data);
+                            
+                            // Handle connection message
+                            if (data.type === 'connected') {
+                                return;
+                            }
+                            
+                            // Handle progress updates
+                            if (data.fileId) {
+                                this.downloadProgress[data.fileId] = data;
+                                if (data.status === 'completed') {
+                                    this.checkFileStatuses();
+                                }
+                                this.$nextTick(() => lucide.createIcons());
+                            }
+                        } catch (e) {
+                            console.error('Failed to parse SSE message:', e);
+                        }
+                    };
+                    
+                    this.eventSource.onerror = (error) => {
+                        console.error('SSE error:', error);
+                        // Try to reconnect after 3 seconds
+                        setTimeout(() => {
+                            if (this.eventSource?.readyState === EventSource.CLOSED) {
+                                this.setupSSE();
+                            }
+                        }, 3000);
                     };
                 },
                 

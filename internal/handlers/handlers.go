@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"multy-loader/internal/config"
 	"multy-loader/internal/downloader"
@@ -312,14 +313,27 @@ func (h *Handler) ProgressStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering if present
 
 	ch := h.downloader.Subscribe()
 	defer h.downloader.Unsubscribe(ch)
+
+	// Send initial connection message
+	fmt.Fprintf(w, "data: {\"type\":\"connected\"}\n\n")
+	flusher.Flush()
+
+	// Heartbeat to keep connection alive (important for SSH tunnels)
+	heartbeat := time.NewTicker(15 * time.Second)
+	defer heartbeat.Stop()
 
 	for {
 		select {
 		case <-r.Context().Done():
 			return
+		case <-heartbeat.C:
+			// Send heartbeat comment to keep connection alive
+			fmt.Fprintf(w, ": heartbeat\n\n")
+			flusher.Flush()
 		case progress := <-ch:
 			data, _ := json.Marshal(progress)
 			fmt.Fprintf(w, "data: %s\n\n", data)
